@@ -1,8 +1,18 @@
-const { createClient } = require('@supabase/supabase-js');
+const UNAVAILABLE = { error: { message: 'Database not available' } };
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY
-);
+function chain(prefix = '') {
+  return new Proxy(() => {}, {
+    get(_, prop) {
+      if (prop === 'then') return undefined;
+      return chain(`${prefix}.${String(prop)}`);
+    },
+    apply(_, __, args) {
+      return Promise.resolve(UNAVAILABLE);
+    },
+  });
+}
 
-module.exports = supabase;
+const db = chain();
+
+module.exports = db;
+module.exports.getSupabase = () => { throw new Error('Supabase is not configured'); };
