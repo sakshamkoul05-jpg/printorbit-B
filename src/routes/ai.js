@@ -5,6 +5,7 @@ const {
   suggestImprovements,
   generateColorPalette,
   enhancePrompt,
+  chat,
 } = require('../services/groq');
 
 const router = Router();
@@ -86,6 +87,24 @@ router.post('/enhance-prompt', async (req, res) => {
   } catch (error) {
     console.error('AI enhance error:', error);
     res.status(500).json({ error: error.message || 'Prompt enhancement failed' });
+  }
+});
+
+// POST /api/ai/chat
+// Body: { message, context? }
+router.post('/chat', async (req, res) => {
+  try {
+    const { message, context } = req.body;
+
+    if (!message) {
+      return res.status(400).json({ error: 'message is required' });
+    }
+
+    const result = await chat(message, context || '');
+    res.json(result);
+  } catch (error) {
+    console.error('AI chat error:', error);
+    res.status(500).json({ error: error.message || 'Chat failed' });
   }
 });
 
