@@ -4,108 +4,79 @@ const groq = new Groq({ apiKey: process.env.GROQ_API_KEY || '' });
 
 const FONTS = ['Inter', 'Space Grotesk', 'Playfair Display', 'Montserrat', 'Poppins', 'Roboto'];
 
-const DESIGN_SYSTEM_PROMPT = `You are an expert print designer AI for PrintOrbit, India's premium printing platform. You create stunning, print-ready designs that compete with top design tools like Canva and Figma.
+const CONTENT_SYSTEM_PROMPT = `You are an expert print content creator for PrintOrbit, India's premium printing platform.
 
-DESIGN PRINCIPLES:
-- Create VISUALLY STUNNING designs with strong visual hierarchy
-- Use professional typography: clear heading/subheading/body text hierarchy
-- Apply color theory: complementary colors, proper contrast (4.5:1 minimum for text)
-- Include visual elements: shapes, lines, decorative accents, brand elements
-- Maintain 16px minimum padding from all edges (safe zone)
-- Use max 3 font families per design for cohesion
-- Add depth with shadows, gradients, and layering
-- Every design should feel complete and production-ready
+Your job is to extract and create design CONTENT from user prompts. You do NOT create coordinates or positions.
 
-TYPOGRAPHY RULES:
-- Headings: Bold, large (10-15% of canvas height), tight letter-spacing
-- Subheadings: Medium weight, 60% of heading size
-- Body: Regular weight, 12-14px equivalent
-- Contact info: Small, clean, well-organized
-- Use font hierarchy to guide the eye
+You must return structured JSON with:
+- title: The main headline (keep it SHORT, max 5-8 words, powerful and impactful)
+- subtitle: Supporting text (one sentence, clear value proposition)
+- body: Optional additional details (1-2 short sentences)
+- tagline: Optional short phrase or category label (max 3 words)
+- contact: Optional contact info placeholder (e.g., "www.printorbit.in | +91 98765 43210")
+- cta: Optional call-to-action text (e.g., "Order Now", "Get Started")
+- layout: One of "centered", "split", "boldHeader", "grid", "elegant", "asymmetric"
+- style: One of "modern", "luxury", "bold", "minimal", "eco", "creative", "corporate", "playful"
 
-COLOR RULES:
-- Primary brand color: dominant (60% of design)
-- Secondary accent: supporting (30%)
-- Neutral: backgrounds and text (10%)
-- Ensure text colors have high contrast against backgrounds
-- Use white space strategically for breathing room
+RULES:
+- Title must be SHORT and PUNCHY (e.g., "Premium Printing", "Design. Print. Delivered.")
+- Never write paragraphs - everything must be concise
+- Choose the layout that best fits the product type and user's description
+- Choose a style that matches the mood described
+- For business cards: use "split" or "elegant" layout
+- For flyers/banners: use "centered" or "boldHeader"
+- For social media: use "asymmetric" or "grid"
+- For labels/stickers: use "centered" or "grid"
 
-ELEMENT RICHNESS:
-- Include background shapes, decorative lines, accent bars
-- Add geometric elements (circles, rectangles, lines) for visual interest
-- Use opacity and layering for depth
-- Include proper alignment and spacing
-
-Return ONLY valid JSON. No markdown, no explanation.`;
+Return ONLY valid JSON.`;
 
 async function generateDesign(prompt, width, height, productType = 'design') {
   const start = Date.now();
   const response = await groq.chat.completions.create({
     model: 'llama-3.3-70b-versatile',
     messages: [
-      { role: 'system', content: DESIGN_SYSTEM_PROMPT },
+      { role: 'system', content: CONTENT_SYSTEM_PROMPT },
       {
         role: 'user',
-        content: `Create a STUNNING, professional print design for a ${productType}.
-Canvas dimensions: ${width}x${height}px
+        content: `Create design content for a ${productType} (${width}x${height}px).
 
-User brief: "${prompt}"
+User's creative brief: "${prompt}"
 
-Requirements:
-- Create AT LEAST 8-12 design elements (background shapes, accent lines, text blocks, decorative elements)
-- Include a clear visual hierarchy with title, subtitle, and supporting text
-- Add decorative geometric elements (circles, rectangles, lines) for visual interest
-- Use proper spacing and alignment
-- Make it look like a professional designer created it
+Extract/create the text content and choose the best layout and style.
 
 Return JSON:
 {
-  "backgroundColor": "#hex",
-  "elements": [
-    {
-      "type": "text|rect|circle|line",
-      "x": number, "y": number,
-      "width": number, "height": number,
-      "fill": "#hex",
-      "text": "string (only for text type)",
-      "fontSize": number (for text type, use relative sizing based on canvas),
-      "fontFamily": "string (from allowed list)",
-      "fontWeight": "normal|bold",
-      "rotation": number (0-360),
-      "opacity": number (0-1)
-    }
-  ]
+  "title": "short punchy headline",
+  "subtitle": "supporting sentence",
+  "body": "optional extra details",
+  "tagline": "optional short label",
+  "contact": "optional contact info",
+  "cta": "optional call to action",
+  "layout": "centered|split|boldHeader|grid|elegant|asymmetric",
+  "style": "modern|luxury|bold|minimal|eco|creative|corporate|playful"
 }`,
       },
     ],
     response_format: { type: 'json_object' },
-    temperature: 0.7,
-    max_tokens: 6000,
+    temperature: 0.6,
+    max_tokens: 500,
   });
 
-  const content = response.choices[0]?.message?.content || '{}';
-  const design = JSON.parse(content);
+  const raw = response.choices[0]?.message?.content || '{}';
+  const parsed = JSON.parse(raw);
 
   return {
     success: true,
-    design: {
-      backgroundColor: design.backgroundColor || '#FFFFFF',
-      elements: (design.elements || []).map((el, i) => ({
-        id: `ai_${Date.now()}_${i}`,
-        type: el.type || 'rect',
-        x: el.x || 0,
-        y: el.y || 0,
-        width: el.width || 100,
-        height: el.height || 100,
-        fill: el.fill || '#000000',
-        text: el.text,
-        fontSize: el.fontSize,
-        fontFamily: el.fontFamily,
-        fontWeight: el.fontWeight,
-        rotation: el.rotation || 0,
-        opacity: el.opacity ?? 1,
-      })),
+    content: {
+      title: parsed.title || 'Your Design',
+      subtitle: parsed.subtitle || '',
+      body: parsed.body || '',
+      tagline: parsed.tagline || '',
+      contact: parsed.contact || '',
+      cta: parsed.cta || '',
     },
+    layout: parsed.layout || 'centered',
+    style: parsed.style || 'modern',
     generationTime: Date.now() - start,
   };
 }
