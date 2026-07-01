@@ -1,69 +1,111 @@
-const Groq = require('groq-sdk');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY || '' });
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
-const FONTS = ['Inter', 'Space Grotesk', 'Playfair Display', 'Montserrat', 'Poppins', 'Roboto'];
+const MODEL_NAME = 'gemini-2.5-flash';
 
-const CONTENT_SYSTEM_PROMPT = `You are an expert print content creator for PrintOrbit, India's premium printing platform.
+function getModel() {
+  return genAI.getGenerativeModel({ model: MODEL_NAME });
+}
 
-Your job is to extract and create design CONTENT from user prompts. You do NOT create coordinates or positions.
+async function generateJSON(prompt, systemInstruction, temperature = 0.6) {
+  const model = getModel();
+  const result = await model.generateContent({
+    contents: [{ role: 'user', parts: [{ text: prompt }] }],
+    generationConfig: {
+      temperature,
+      maxOutputTokens: 4096,
+      responseMimeType: 'application/json',
+    },
+    systemInstruction: { parts: [{ text: systemInstruction }] },
+  });
+  const text = result.response.text();
+  return JSON.parse(text);
+}
 
-You must return structured JSON with:
-- title: The main headline (keep it SHORT, max 5-8 words, powerful and impactful)
-- subtitle: Supporting text (one sentence, clear value proposition)
-- body: Optional additional details (1-2 short sentences)
-- tagline: Optional short phrase or category label (max 3 words)
-- contact: Optional contact info placeholder (e.g., "www.printorbit.in | +91 98765 43210")
-- cta: Optional call-to-action text (e.g., "Order Now", "Get Started")
-- layout: One of "centered", "split", "boldHeader", "grid", "elegant", "asymmetric"
-- style: One of "modern", "luxury", "bold", "minimal", "eco", "creative", "corporate", "playful"
+const CONTENT_SYSTEM_PROMPT = `You are an expert print designer for PrintOrbit, India's premium printing platform.
 
-RULES:
-- Title must be SHORT and PUNCHY (e.g., "Premium Printing", "Design. Print. Delivered.")
-- Never write paragraphs - everything must be concise
-- Choose the layout that best fits the product type and user's description
-- Choose a style that matches the mood described
-- For business cards: use "split" or "elegant" layout
-- For flyers/banners: use "centered" or "boldHeader"
-- For social media: use "asymmetric" or "grid"
-- For labels/stickers: use "centered" or "grid"
+Your job is to create design CONTENT for print products. You think like a professional graphic designer — understanding visual hierarchy, typography pairing, color theory, and brand identity.
+
+RULES FOR EXCELLENT DESIGNS:
+1. TITLE: Must be SHORT, PUNCHY, MEMORIAL (3-6 words max). Examples: "Smile Bright", "Power Print", "Bold Moves"
+2. SUBTITLE: One compelling sentence that sells. Not generic filler.
+3. TAGLINE: 2-3 word category label (e.g., "DENTAL CARE", "PREMIUM QUALITY", "EST. 2024")
+4. BODY: Only if needed. 1 short sentence with key info.
+5. CONTACT: Realistic placeholder (phone, website, or address)
+6. CTA: Action-oriented (e.g., "Book Now", "Call Today", "Get Quote")
+
+LAYOUT SELECTION:
+- "centered": Symmetrical, professional, great for corporate/medical/legal
+- "split": Left text + right colored panel, modern and dynamic
+- "boldHeader": Big colored header bar + content below, eye-catching
+- "elegant": Minimal with decorative borders, luxury feel
+- "asymmetric": Off-center with overlapping elements, creative
+- "grid": 4-box grid layout, organized and structured
+
+STYLE SELECTION:
+- "modern": Blue/white, clean, tech-forward
+- "luxury": Dark + gold, premium, sophisticated
+- "bold": Orange/red, high energy, attention-grabbing
+- "minimal": Monochrome, thin, elegant simplicity
+- "eco": Green tones, natural, organic feel
+- "creative": Purple/pink, artistic, expressive
+- "corporate": Navy/dark, structured, trustworthy
+- "playful": Bright/yellow, fun, approachable
+
+PRODUCT-SPECIFIC GUIDANCE:
+- Business cards: "split" or "elegant" layout. Include name, title, phone, email, website.
+- Flyers: "boldHeader" or "centered". Title should grab attention instantly.
+- Banners: "boldHeader" or "centered". Large readable text.
+- Posters: "asymmetric" or "boldHeader". Artistic and eye-catching.
+- Labels/Stickers: "centered" or "grid". Clean and informative.
+- T-shirts: "centered". Bold graphic text, minimal words.
+- Mugs: "centered" or "elegant". Quote or simple graphic.
+
+CRITICAL: The title MUST be creative and memorable. "Raghav Dental" is boring. "Smile Bright" or "Dental Excellence" is professional.
+
+Return ONLY valid JSON.`;
+
+const DESIGN_SYSTEM_PROMPT = `You are an expert print design editor. You modify canvas elements precisely.
+
+When editing designs, you understand spatial relationships, color harmony, and visual balance.
+
+ELEMENT TYPES:
+- "rect": Rectangle (fill, x, y, width, height, opacity, radius for rounded corners)
+- "circle": Circle (fill, x, y, width, height, opacity)
+- "text": Text (fill, x, y, width, fontSize, fontFamily, fontWeight, text, opacity)
+- "line": Line (fill, x, y, width, height, strokeWidth, opacity)
+
+DESIGN PRINCIPLES:
+- Visual hierarchy: title > subtitle > body > contact
+- Consistent spacing (use multiples of 8px)
+- Contrast: text must be readable on background
+- Balance: distribute visual weight evenly
+- Color harmony: use 2-3 colors max
 
 Return ONLY valid JSON.`;
 
 async function generateDesign(prompt, width, height, productType = 'design') {
   const start = Date.now();
-  const response = await groq.chat.completions.create({
-    model: 'llama-3.3-70b-versatile',
-    messages: [
-      { role: 'system', content: CONTENT_SYSTEM_PROMPT },
-      {
-        role: 'user',
-        content: `Create design content for a ${productType} (${width}x${height}px).
+  const userPrompt = `Create design content for a ${productType} (${width}x${height}px).
 
 User's creative brief: "${prompt}"
 
-Extract/create the text content and choose the best layout and style.
+Choose the BEST layout and style for this product. Create compelling, creative text content.
 
 Return JSON:
 {
-  "title": "short punchy headline",
-  "subtitle": "supporting sentence",
+  "title": "short punchy creative headline",
+  "subtitle": "compelling supporting sentence",
   "body": "optional extra details",
-  "tagline": "optional short label",
+  "tagline": "optional 2-3 word label",
   "contact": "optional contact info",
   "cta": "optional call to action",
   "layout": "centered|split|boldHeader|grid|elegant|asymmetric",
   "style": "modern|luxury|bold|minimal|eco|creative|corporate|playful"
-}`,
-      },
-    ],
-    response_format: { type: 'json_object' },
-    temperature: 0.6,
-    max_tokens: 500,
-  });
+}`;
 
-  const raw = response.choices[0]?.message?.content || '{}';
-  const parsed = JSON.parse(raw);
+  const parsed = await generateJSON(userPrompt, CONTENT_SYSTEM_PROMPT, 0.7);
 
   return {
     success: true,
@@ -83,32 +125,21 @@ Return JSON:
 
 async function editDesign(command, currentElements, backgroundColor) {
   const start = Date.now();
-  const response = await groq.chat.completions.create({
-    model: 'llama-3.3-70b-versatile',
-    messages: [
-      { role: 'system', content: DESIGN_SYSTEM_PROMPT },
-      {
-        role: 'user',
-        content: `Current design:
+  const userPrompt = `Current design:
 Background: ${backgroundColor}
 Elements: ${JSON.stringify(currentElements, null, 2)}
 
 User wants to modify: "${command}"
 
-Return the COMPLETE updated design JSON. Preserve all elements not mentioned in the edit.
+Apply the requested changes precisely. Preserve all elements not mentioned.
+
+Return JSON:
 {
   "backgroundColor": "#hex",
   "elements": [ ... ]
-}`,
-      },
-    ],
-    response_format: { type: 'json_object' },
-    temperature: 0.5,
-    max_tokens: 4000,
-  });
+}`;
 
-  const content = response.choices[0]?.message?.content || '{}';
-  const design = JSON.parse(content);
+  const design = await generateJSON(userPrompt, DESIGN_SYSTEM_PROMPT, 0.5);
 
   return {
     success: true,
@@ -136,15 +167,11 @@ Return the COMPLETE updated design JSON. Preserve all elements not mentioned in 
 }
 
 async function suggestImprovements(elements, backgroundColor) {
-  const response = await groq.chat.completions.create({
-    model: 'llama-3.3-70b-versatile',
-    messages: [
-      { role: 'system', content: DESIGN_SYSTEM_PROMPT },
-      {
-        role: 'user',
-        content: `Analyze this print design and suggest improvements:
+  const userPrompt = `Analyze this print design and suggest improvements:
 Background: ${backgroundColor}
 Elements: ${JSON.stringify(elements, null, 2)}
+
+Focus on: color harmony, font pairings, layout balance, contrast, spacing, visual hierarchy.
 
 Return JSON:
 {
@@ -156,18 +183,9 @@ Return JSON:
       "priority": "high|medium|low"
     }
   ]
-}
+}`;
 
-Focus on: color harmony, font pairings, layout balance, contrast issues, spacing.`,
-      },
-    ],
-    response_format: { type: 'json_object' },
-    temperature: 0.4,
-    max_tokens: 2000,
-  });
-
-  const content = response.choices[0]?.message?.content || '{}';
-  const result = JSON.parse(content);
+  const result = await generateJSON(userPrompt, DESIGN_SYSTEM_PROMPT, 0.4);
 
   return {
     success: true,
@@ -176,57 +194,37 @@ Focus on: color harmony, font pairings, layout balance, contrast issues, spacing
 }
 
 async function generateColorPalette(description) {
-  const response = await groq.chat.completions.create({
-    model: 'llama-3.3-70b-versatile',
-    messages: [
-      {
-        role: 'system',
-        content: 'You are a color palette designer. Generate harmonious color palettes as JSON.',
-      },
-      {
-        role: 'user',
-        content: `Generate a color palette for: "${description}"
+  const userPrompt = `Generate a harmonious color palette for: "${description}"
 
 Return JSON:
 {
   "name": "palette name",
   "colors": ["#hex1", "#hex2", "#hex3", "#hex4", "#hex5"],
   "description": "why this palette works"
-}`,
-      },
-    ],
-    response_format: { type: 'json_object' },
-    temperature: 0.6,
-    max_tokens: 500,
-  });
+}`;
 
-  const content = response.choices[0]?.message?.content || '{}';
-  return JSON.parse(content);
+  return await generateJSON(userPrompt, 'You are a color palette designer. Generate harmonious color palettes as JSON.', 0.6);
 }
 
 async function enhancePrompt(prompt, productType) {
-  const response = await groq.chat.completions.create({
-    model: 'llama-3.3-70b-versatile',
-    messages: [
-      {
-        role: 'system',
-        content: 'You are a design brief expert. Expand short user prompts into detailed design briefs.',
-      },
-      {
-        role: 'user',
-        content: `Expand this brief prompt into a detailed design brief for a ${productType}:
+  const model = getModel();
+  const result = await model.generateContent({
+    contents: [{
+      role: 'user',
+      parts: [{ text: `Expand this brief prompt into a detailed design brief for a ${productType}:
 "${prompt}"
 
-Return a concise, enhanced version (2-3 sentences). Just the enhanced prompt, nothing else.`,
-      },
-    ],
-    temperature: 0.5,
-    max_tokens: 300,
+Return a concise, enhanced version (2-3 sentences). Just the enhanced prompt text, nothing else.` }],
+    }],
+    generationConfig: {
+      temperature: 0.5,
+      maxOutputTokens: 300,
+    },
   });
 
   return {
     success: true,
-    enhanced: response.choices[0]?.message?.content || prompt,
+    enhanced: result.response.text() || prompt,
   };
 }
 
@@ -281,20 +279,28 @@ RULES:
 - Always guide toward creating or ordering print products`;
 
 async function chat(message, context = '') {
-  const response = await groq.chat.completions.create({
-    model: 'llama-3.3-70b-versatile',
-    messages: [
-      { role: 'system', content: ORBIT_MAGIC_SYSTEM },
-      ...(context ? [{ role: 'system', content: `Current page context: ${context}` }] : []),
-      { role: 'user', content: message },
-    ],
-    temperature: 0.7,
-    max_tokens: 500,
+  const model = getModel();
+  const contents = [];
+
+  if (context) {
+    contents.push({ role: 'user', parts: [{ text: `[Page context: ${context}]` }] });
+    contents.push({ role: 'model', parts: [{ text: 'Understood, I have the context.' }] });
+  }
+
+  contents.push({ role: 'user', parts: [{ text: message }] });
+
+  const result = await model.generateContent({
+    contents,
+    generationConfig: {
+      temperature: 0.7,
+      maxOutputTokens: 500,
+    },
+    systemInstruction: { parts: [{ text: ORBIT_MAGIC_SYSTEM }] },
   });
 
   return {
     success: true,
-    reply: response.choices[0]?.message?.content || "I'm here to help! Ask me anything about printing.",
+    reply: result.response.text() || "I'm here to help! Ask me anything about printing.",
   };
 }
 
