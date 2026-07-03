@@ -13,6 +13,7 @@ const projectsRoutes = require('./routes/projects');
 const contactRoutes = require('./routes/contact');
 const uploadRoutes = require('./routes/upload');
 const aiRoutes = require('./routes/ai');
+const mockupRoutes = require('./routes/mockups');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -50,6 +51,7 @@ app.use('/api/projects', projectsRoutes);
 app.use('/api/contact', contactRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/ai', aiRoutes);
+app.use('/api/mockups', mockupRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
